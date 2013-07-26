@@ -66,10 +66,9 @@ if __name__=="__main__":
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
 	target         = [ math.log(math.log(obj['__ans__']+1)+1) for obj  in training_data ]
 	#prep_topics(training_data,target,SVR(kernel='linear'),50)
-	prep_words(training_data,target,Ridge(),200)
-	"""
+	#prep_words(training_data,target,Ridge(),200)
 	training_data.sort(key=lambda x:x['__ans__'])
 	for i in training_data:
-		print "%0.3f %s"%(i['__ans__'],i['question_text'])
 
-	"""
+		print "%0.3f %s"%(math.log(math.log(i['__ans__']+0.9)+0.9),i['question_text'].encode('utf-8'))
+

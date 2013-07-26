@@ -80,7 +80,7 @@ def formatting_features(obj):
 		)
 	correct_form_ratio = correct_form_count/float(total_words+1e-10)
 	token_word_ratio   = qn_tok_words/float(total_words+1e-10)
-#	name_ratio        = (nm_pres + pl_pres)/float(total_words+1e-10)
+	name_ratio        = (nm_pres + pl_pres)/float(total_words+1e-10)
 	result = [
 				nm_pres,pl_pres,
 				qn_mark,start_cap,
