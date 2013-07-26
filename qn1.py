@@ -1,5 +1,6 @@
 """
-62.900
+62.900	64.98
+63.200
 """
 import sys,json,re,math
 import numpy as np
@@ -105,6 +106,7 @@ def formatting_features(obj):
 				len(punct),
 		   		math.log(len(topics)+1),
 				name_ratio,
+			#	nm_pres + pl_pres,
 			#	topic_word_ratio,
 				dict_words,
 			#	qn_topic_words,
@@ -142,16 +144,15 @@ def word_scorer(x):
 	for i,w in enumerate(tokens):
 		#w= ' '.join(w)
 		if w not in stopwords and len(w) > 2:
-			res[w] =  res.get(w,0) + 1/(i+1)#math.exp(-i*len(tokens)) + 1
+			res[w] =  res.get(w,0) + 1 + 1/float(i+1)#math.exp(-i*len(tokens)) + 1
 	return res
 
 
 question = Pipeline([
 	('extract', Extractor(lambda x: x['question_text'])),
 	('counter', word_counter),
-#	('word_s', Extractor(word_scorer)),
-#	('counter',DictVectorizer()),
-	('f_sel',   SelectKBest(score_func=chi2,k=20)),
+#	('word_s', Extractor(word_scorer)),('counter',DictVectorizer()),
+	('f_sel',   SelectKBest(score_func=chi2,k=25)),
 #	('cluster',MiniBatchKMeans(n_clusters=8))
 ])
 topics = Pipeline([
@@ -168,7 +169,7 @@ topics = Pipeline([
 ctopic = Pipeline([
 	('extract',Extractor(lambda x:
 		{ x['context_topic']['name']:1 }
-		if x['context_topic'] else {'none':1})),
+		if x['context_topic'] else { 'none':1 })),
 	#('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
 	('counter', DictVectorizer()),
 	('f_sel',   SelectKBest(score_func=chi2,k=30)),
@@ -204,8 +205,8 @@ model = Pipeline([
 	])),
 #	('toarray',ToArray()),
 #	('dim_red',PCA(n_components=2)),
-	('classify',SVC())
-#	('classify',SGDClassifier(alpha=1e-3,n_iter=1500))
+#	('classify',SVC())
+	('classify',SGDClassifier(alpha=1e-3,n_iter=1500))
 
 ])
 

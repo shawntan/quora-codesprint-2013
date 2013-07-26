@@ -1,6 +1,7 @@
 """
-on pc 56.459
-on hr 57.69
+on pc 57.849
+	  57.870
+on hr 58.62
 """
 
 
@@ -72,7 +73,7 @@ def formatting_features(obj):
 	qn_mark   = 1 if "?" in question else -1 
 	start_cap = 1 if re.match(r'^[A-Z]',question) else -1
 	if tokens:
-		qn_type = [ sum(1.0 for w in tokens if w in qws)
+		qn_type = [ 1 if sum(1.0 for w in tokens if w in qws) else 0
 						for qws in qn_type_words ]
 		nm_pres = sum(1.0 for w in tokens if w.lower() in names
 							and re.match(r'^[A-Z]',w))
@@ -108,7 +109,7 @@ def formatting_features(obj):
 				math.log(len(topics)+1),
 		#		name_ratio,
 				topic_word_ratio,
-				qn_topic_words,
+				1 if qn_topic_words else 0,
 				correct_form_count,
 				math.log(total_words+1)
 			] + qn_type
@@ -117,8 +118,8 @@ def formatting_features(obj):
 word_counter = CountVectorizer(
 		tokenizer=wordpunct_tokenize,
 		stop_words=stopwords,
-		binary=True,
-		ngram_range=(1,2),
+	#	binary=True,
+		ngram_range=(1,1),
 	#	dtype=np.float32
 	)
 
@@ -143,7 +144,7 @@ def word_scorer(x):
 	for i,w in enumerate(tokens):
 		w = w.lower()
 		if w not in stopwords and len(w) > 3:
-			res[w] =  1/(i+1) #math.exp(-i*len(tokens)) + 1
+			res[w] = res.get(w,0) + 1/(i+1)  #math.exp(-i*len(tokens)) + 1
 	return res
 
 
@@ -159,8 +160,8 @@ topics = Pipeline([
 	('extract',Extractor(lambda x: {
 		t['name']:1 for t in x['topics']
 	})),
-	('counter', FeatureHasher(n_features=2**16+1, dtype=np.float32)),
-#	('counter',DictVectorizer()),
+#	('counter', FeatureHasher(n_features=2**16+1, dtype=np.float32)),
+	('counter',DictVectorizer()),
 	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=180)),
 #	('cluster', MiniBatchKMeans(n_clusters=55))
 #	('cluster',MiniBatchKMeans(n_clusters=8))
@@ -169,10 +170,10 @@ topics = Pipeline([
 ctopic = Pipeline([
 	('extract',Extractor(lambda x:
 		{ x['context_topic']['name']:1 }
-		if x['context_topic'] else { 'none':1})),
-	#('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
-	('counter',DictVectorizer()),
-	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=50)),
+		if x['context_topic'] else {})),
+	('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
+	#('counter',DictVectorizer()),
+	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=45)),
 ])
 
 topic_question = Pipeline([
@@ -183,11 +184,15 @@ topic_question = Pipeline([
 ])
 others = Pipeline([
 	('extract', Extractor(lambda x: [
-		float(1 if x['anonymous'] else 0),
-	#	math.log(x['num_answers']+1),
+		1 if x['anonymous'] else 0,
+		1 if x['promoted_to'] else 0,
+		1 if x['num_answers'] else 0,
+		#math.log(x['num_answers']+1),
 		math.log(x['promoted_to']+1),
 		math.log(x['promoted_to']+1) - math.log(sum(t['followers'] for t in x['topics'])+1),
+		x['promoted_to']/float(sum(t['followers'] for t in x['topics'])+1),
 		math.log(x['num_answers']+1) - math.log(sum(t['followers'] for t in x['topics'])+1),
+		x['num_answers']/float(sum(t['followers'] for t in x['topics'])+1),
 	])),
 	('scaler',  StandardScaler())
 ])

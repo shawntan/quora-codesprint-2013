@@ -1,6 +1,8 @@
 """
-61.607
-63.34
+61.645	63.34
+62.102	63.51
+62.167  63.54
+62.188
 """
 import sys,json,re,math
 import numpy as np
@@ -53,7 +55,12 @@ qn_type_words = [ set(l) for l in [
 #	['what','why','how'],
 #	['is','do','can','did','was'],
 	['i'],
-	['should','could','would','will']
+	[
+		#'should',
+		'could',
+		'would',
+	#	'will'
+	]
 ]]
 
 def formatting_features(obj):
@@ -69,7 +76,7 @@ def formatting_features(obj):
 	qn_mark   = 1 if "?" in question else -1 
 	start_cap = 1 if re.match(r'^[A-Z]',question) else -1
 	if tokens:
-		qn_type = [ sum(1.0 for w in tokens if w in qws)
+		qn_type = [ 1 if sum(1.0 for w in tokens if w in qws) else 0
 						for qws in qn_type_words ]
 		nm_pres = sum(1.0 for w in tokens if w.lower() in names
 							and re.match(r'^[A-Z]',w))
@@ -95,9 +102,7 @@ def formatting_features(obj):
 	name_ratio         = (nm_pres + pl_pres)/float(total_words+1)
 	punctuation_ratio  = len(punct)/float(total_words+1)
 	result = [
-			#	1 if nm_pres else 0,
 				nm_pres,
-			#	1 if pl_pres else 0,
 				pl_pres,
 			#	qn_mark,
 				start_cap,
@@ -117,7 +122,7 @@ def formatting_features(obj):
 word_counter = CountVectorizer(
 		tokenizer=wordpunct_tokenize,
 		stop_words=stopwords,
-		binary=True,
+	#	binary=True,
 		ngram_range=(1,1),
 	#	dtype=np.float32
 	)
@@ -143,16 +148,15 @@ def word_scorer(x):
 	for i,w in enumerate(tokens):
 		#w= ' '.join(w)
 		if w not in stopwords and len(w) > 2:
-			res[w] = 1# res.get(w,0) + 1/(i+1) + 1#math.exp(-i*len(tokens)) + 1
+			res[w] =  1# + res.get(w,0) # + math.exp(-i*len(tokens))#+ 1/float(i+1) #math.exp(-i*len(tokens)) + 1
 	return res
 
 
 question = Pipeline([
 	('extract', Extractor(lambda x: x['question_text'])),
-	('counter', word_counter),
-#	('word_s', Extractor(word_scorer)),
-#	('counter',DictVectorizer()),
-	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=80)),
+#	('counter', word_counter),
+	('word_s', Extractor(word_scorer)),('counter',DictVectorizer()),
+	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=90)),
 #	('cluster',MiniBatchKMeans(n_clusters=8))
 ])
 topics = Pipeline([
@@ -169,7 +173,7 @@ topics = Pipeline([
 ctopic = Pipeline([
 	('extract',Extractor(lambda x:
 		{ x['context_topic']['name']:1 }
-		if x['context_topic'] else {'none':1})),
+		if x['context_topic'] else {})),
 	#('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
 	('counter',DictVectorizer()),
 	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=30)),
@@ -183,7 +187,7 @@ topic_question = Pipeline([
 ])
 others = Pipeline([
 	('extract', Extractor(lambda x: [
-		float(1 if x['anonymous'] else 0),
+		1 if x['anonymous'] else 0,
 	])),
 #	('scaler',  StandardScaler())
 ])
@@ -191,17 +195,17 @@ others = Pipeline([
 
 followers = Pipeline([
 	('extract',Extractor(lambda x: [
-		math.log(sum(t['followers'] for t in x['topics'])+0.001)
+		math.log(sum(t['followers'] for t in x['topics'])+1e-2)
 	])),
 	('scaler' ,StandardScaler())
 ])
 model = Pipeline([
 	('union',FeatureUnion([
 		('content', topic_question),
-		('ctopic',  ctopic),
+#		('ctopic',  ctopic),
 		('formatting',formatting),
 		('followers',followers),
-		('others',others)
+#		('others',others)
 	])),
 #	('toarray',ToArray()),
 #	('dim_red',PCA(n_components=2)),
