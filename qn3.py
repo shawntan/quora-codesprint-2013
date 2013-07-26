@@ -1,3 +1,8 @@
+"""
+on pc 56.459
+on hr 57.69
+"""
+
 
 import sys,json,re,math
 import numpy as np
@@ -46,12 +51,12 @@ class ToArray:
 		return self.transform(X)
 
 qn_type_words = [ set(l) for l in [
-	['who','which','when','where'],
-	['what','why','how'],
+#	['who','which','when','where'],
+#	['what','why','how'],
 	['is','do','can','did','was'],
 	['i'],
 #	['deleted'],
-	['should','could','would','will']
+#	['should','could','would','will']
 ]]
 
 def formatting_features(obj):
@@ -62,11 +67,10 @@ def formatting_features(obj):
 	top_toks = set([ w.lower() for t in obj['topics'] 
 						for w in wordpunct_tokenize(t['name']) ])
 	qn_toks  = set(tokens)
-	qn_tok_words = len(top_toks & qn_toks)
+	qn_topic_words = len(top_toks & qn_toks)
 
 	qn_mark   = 1 if "?" in question else -1 
 	start_cap = 1 if re.match(r'^[A-Z]',question) else -1
-	qn_somewhere =  1 if re.match(r'\?$',question) or re.match(r'\?\s*[A-Z]',question) else -1
 	if tokens:
 		qn_type = [ sum(1.0 for w in tokens if w in qws)
 						for qws in qn_type_words ]
@@ -78,6 +82,10 @@ def formatting_features(obj):
 		qn_type = [-1.0]*len(qn_type_words)
 		nm_pres = -1.0
 		pl_pres = -1.0
+
+#	qn_somewhere =  1 if sum(qn_type) and (re.match(r'\?$',question)
+#						or re.match(r'\?\s*[A-Z]',question)) else -1
+
 	total_words = len(tokens)
 	#dict_words  = sum(1 for w in tokens if w.lower() in eng_words)
 	correct_form_count = sum(1.0 for w in tokens
@@ -85,21 +93,22 @@ def formatting_features(obj):
 			or re.match(r'^[A-Z]',w)
 		)
 	question_form = 1 if '?' in punct and sum(1 for w in tokens if w in qn_words) else -1
-	correct_form_ratio = correct_form_count/float(total_words+1e-10)
-	token_word_ratio   = qn_tok_words/float(total_words+1e-10)
-	name_ratio        = (nm_pres + pl_pres)/float(total_words+1e-10)
-	punctuation_ratio = len(punct)/float(total_words+1e-10)
+	#correct_form_ratio = correct_form_count/float(total_words+1)
+	topic_word_ratio  = qn_topic_words/float(total_words+1)
+	name_ratio        = (nm_pres + pl_pres)/float(total_words+1)
+	punctuation_ratio = len(punct)/float(total_words+1)
 	result = [
-				nm_pres,pl_pres,
-				#qn_mark,
+				1 if nm_pres else 0,
+				1 if pl_pres else 0,
+				qn_mark,
 				start_cap,
-				qn_somewhere,
-				correct_form_ratio,
-				len(punct),
+		#		qn_somewhere,
+		#		correct_form_ratio,
+		#		len(punct),
 				math.log(len(topics)+1),
-#				name_ratio,
-				token_word_ratio,
-				qn_tok_words,
+		#		name_ratio,
+				topic_word_ratio,
+				qn_topic_words,
 				correct_form_count,
 				math.log(total_words+1)
 			] + qn_type
@@ -140,10 +149,10 @@ def word_scorer(x):
 
 question = Pipeline([
 	('extract', Extractor(lambda x: x['question_text'])),
-	#('counter', word_counter),
+#	('counter', word_counter),
 	('word_s', Extractor(word_scorer)),
 	('counter',DictVectorizer()),
-	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=100)),
+	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=80)),
 #	('cluster',MiniBatchKMeans(n_clusters=8))
 ])
 topics = Pipeline([
@@ -151,9 +160,19 @@ topics = Pipeline([
 		t['name']:1 for t in x['topics']
 	})),
 	('counter', FeatureHasher(n_features=2**16+1, dtype=np.float32)),
-	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=100)),
-	#('cluster', MiniBatchKMeans(n_clusters=55))
+#	('counter',DictVectorizer()),
+	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=180)),
+#	('cluster', MiniBatchKMeans(n_clusters=55))
 #	('cluster',MiniBatchKMeans(n_clusters=8))
+])
+
+ctopic = Pipeline([
+	('extract',Extractor(lambda x:
+		{ x['context_topic']['name']:1 }
+		if x['context_topic'] else { 'none':1})),
+	#('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
+	('counter',DictVectorizer()),
+	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=50)),
 ])
 
 topic_question = Pipeline([
@@ -165,7 +184,7 @@ topic_question = Pipeline([
 others = Pipeline([
 	('extract', Extractor(lambda x: [
 		float(1 if x['anonymous'] else 0),
-		math.log(x['num_answers']+1),
+	#	math.log(x['num_answers']+1),
 		math.log(x['promoted_to']+1),
 		math.log(x['promoted_to']+1) - math.log(sum(t['followers'] for t in x['topics'])+1),
 		math.log(x['num_answers']+1) - math.log(sum(t['followers'] for t in x['topics'])+1),
@@ -174,21 +193,11 @@ others = Pipeline([
 ])
 
 
-ctopic = Pipeline([
-	('extract',Extractor(lambda x:
-		{ x['context_topic']['name']:1 }
-		if x['context_topic'] else { 'none':1})),
-	('counter',FeatureHasher(n_features=2**8+1, dtype=np.float)),
-	('f_sel',  SelectKBest(
-		score_func=lambda X,Y:f_regression(X,Y,center=False),
-		k=25)),
-])
-
 followers = Pipeline([
 	('extract',Extractor(lambda x: [
 		math.log(sum(t['followers'] for t in x['topics'])+0.001)
 	])),
-	('scaler' ,StandardScaler())
+#	('scaler' ,StandardScaler())
 ])
 model = Pipeline([
 	('union',FeatureUnion([
