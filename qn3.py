@@ -13,8 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from nltk.tokenize import wordpunct_tokenize
 from nltk.corpus   import words
 from nltk.corpus   import stopwords,gazetteers,names
-from nltk.collocations import *
-from nltk.metrics import BigramAssocMeasures
+from sklearn.feature_selection import *
 eng_words = set([ w.lower() for w in words.words('en') ])
 qn_words = set(['who','what','what',
 				'when','where','how',
@@ -26,14 +25,12 @@ names  = set([ w.lower() for w in names.words() ])
 
 
 class Extractor:
-	def __init__(self,fun,per_instance=True):
+	def __init__(self,fun):
 		self.extractor = fun
 	def fit(self,X,Y):
 		pass
 	def transform(self,X):
-		if self.per_instance:
-			return [ self.extractor(x) for x in X ] 
-		else: return self.extractor(X)
+		return [ self.extractor(x) for x in X ] 
 	def fit_transform(self,X,_):
 		return self.transform(X)
 
@@ -48,22 +45,11 @@ class ToArray:
 		return self.transform(X)
 
 qn_type_words = [ set(l) for l in [
-	['who'],
+	['who','which','when','where'],
 	['what','why','how'],
-	['which'],
-	['when'],
-	['where'],
 	['is','do','can','did','was'],
-	['should','could'],
-	['would','will']
+#	['should','could','would','will']
 ]]
-
-def find_collocations(text):
-	finder = BigramCollocationFinder.from_words(text,window_size=10)
-	finder.apply_freq_filter(2)
-	finder.apply_word_filter(lambda w: len(w) < 3 or w.lower() in stopwords)
-	return finder.nbest(BigramAssocMeasures.chi_sq,100)
-	
 
 def formatting_features(question):
 	question = question.strip()
@@ -73,13 +59,16 @@ def formatting_features(question):
 	if tokens:
 		qn_type = [ sum(1.0 for w in tokens if w in qws)
 						for qws in qn_type_words ]
-		nm_pres = sum(1.0 for w in tokens if w.lower() in names)
-		pl_pres = sum(1.0 for w in tokens if w.lower() in places)
+		nm_pres = sum(1.0 for w in tokens if w.lower() in names
+							and re.match(r'^[A-Z]',w))
+		pl_pres = sum(1.0 for w in tokens if w.lower() in places
+							and re.match(r'^[A-Z]',w))
 	else:
-		qn_type = [0.0]*len(qn_type_words)
-		nm_pres = 0.0
-		pl_pres = 0.0
+		qn_type = [-1.0]*len(qn_type_words)
+		nm_pres = -1.0
+		pl_pres = -1.0
 	total_words = len(tokens)
+	#dict_words  = sum(1 for w in tokens if w.lower() in eng_words)
 	correct_form_count = sum(1.0 for w in tokens
 			if (w.lower() in eng_words and not re.match(r'^[A-Z]+$',w))
 			or re.match(r'^[A-Z]',w)
@@ -97,15 +86,19 @@ def formatting_features(question):
 word_counter = CountVectorizer(
 		tokenizer=wordpunct_tokenize,
 		stop_words=stopwords,
-		ngram_range=(1,1),
-		dtype=np.float32
+		binary=True,
+		ngram_range=(1,2),
+	#	dtype=np.float32
 	)
 
 counter = HashingVectorizer(
+#		vocabulary=vocabulary,
 		tokenizer=wordpunct_tokenize,
 		stop_words=stopwords,
+#		binary=True,
 		n_features = 2**10+1,
 		ngram_range=(1,2),
+#		dtype=np.float32
 	)
 
 formatting = Pipeline([
@@ -115,37 +108,38 @@ formatting = Pipeline([
 
 question = Pipeline([
 	('extract', Extractor(lambda x: x['question_text'])),
-	('counter', counter),
-	('cluster',MiniBatchKMeans(n_clusters=8))
+	('counter', word_counter),
+	('f_sel',   SelectKBest(
+		score_func=lambda X,Y:f_regression(X,Y,center=False),k=100)),
+#	('cluster',MiniBatchKMeans(n_clusters=8))
 ])
 topics = Pipeline([
 	('extract',Extractor(lambda x: {
 		t['name']:(
-			2 if x['context_topic']
+			1 if x['context_topic']
 			and  x['context_topic']['name'] == t['name']
 			else 1) for t in x['topics']
 		})),
-	('counter',FeatureHasher(n_features=2**16+1, dtype=np.float32)),
+	('counter', FeatureHasher(n_features=2**8+1, dtype=np.float32)),
 	('cluster',MiniBatchKMeans(n_clusters=8))
 ])
 
 topic_question = Pipeline([
 	('content',FeatureUnion([
 		('question', question),
-		('topics',   topics),
+		('topics',   topics)
 	])),
 ])
-
 
 formatting = Pipeline([
 	('extract', Extractor(lambda x: x['question_text'])),
 	('formatting',formatting)
 ])
-
 others = Pipeline([
 	('extract', Extractor(lambda x: [
+		float(1 if x['anonymous'] else 0),
 		math.log(x['num_answers']+1),
-		float(x['promoted_to']),
+		math.log(x['promoted_to']+1),
 		math.log(x['promoted_to']+1) - math.log(sum(t['followers'] for t in x['topics'])+1),
 		math.log(x['num_answers']+1) - math.log(sum(t['followers'] for t in x['topics'])+1),
 	])),
@@ -153,27 +147,38 @@ others = Pipeline([
 ])
 
 
-
 ctopic = Pipeline([
 	('extract',Extractor(lambda x:
 		{ x['context_topic']['name']:1 }
-		if x['context_topic'] else {})),
-	('counter',FeatureHasher(n_features=2**10, dtype=np.byte)),
+		if x['context_topic'] else { 'none':1})),
+	('counter',FeatureHasher(n_features=2**10, dtype=np.float)),
+	('f_sel',  SelectKBest(
+		score_func=lambda X,Y:f_regression(X,Y,center=False),
+		k=200)),
 ])
+
 followers = Pipeline([
 	('extract',Extractor(lambda x: [
-		math.log(sum(t['followers'] for t in x['topics'])+1)
+		math.log(sum(t['followers'] for t in x['topics'])+0.001)
 	])),
 	('scaler' ,StandardScaler())
 ])
 model = Pipeline([
 	('union',FeatureUnion([
 		('content', topic_question),
+		('ctopic',  ctopic),
 		('formatting',formatting),
 		('followers',followers),
 		('others',others)
 	])),
-	('regress',Ridge())
+#	('toarray',ToArray()),
+#	('dim_red',PCA(n_components=2)),
+#	('regress',DecisionTreeRegressor())
+#	('regress',KNeighborsRegressor())
+#	('regress',SVR(kernel='linear'))
+#	('regress',Ridge())
+	('regress',RidgeCV(alphas=[ 0.1**(-i) for i in range(10)]))
+#	('regress',SGDRegressor(alpha=1e-3,n_iter=1500))
 
 ])
 
@@ -181,23 +186,17 @@ model = Pipeline([
 
 training_count = int(sys.stdin.next())
 training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
-sentences      = ( w.lower()
-					for instance in training_data
-						for w in wordpunct_tokenize(instance['question_text']) ] )
-
-
-collocated     = find_collocations(sentences)
-print collocated
-"""
-target         = [ math.log(obj['__ans__']+1) for obj  in training_data ]
+target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
 
 model.fit(training_data,target)
+#sys.stderr.write(' '.join(vocabulary)+"\n")
+#sys.stderr.write("%s\n"%counter.transform([' '.join(vocabulary)]))
 
 test_count = int(sys.stdin.next())
 test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]
 
 for i,j in zip(model.predict(test_data).tolist(),test_data):
 	print json.dumps({ 
-		'__ans__':math.exp(i)-1,'question_key':j['question_key']
+		'__ans__':math.exp(i)-0.9,'question_key':j['question_key']
 	})
-"""
+
