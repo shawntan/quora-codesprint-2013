@@ -127,17 +127,22 @@ def word_scorer(x):
 		if w not in stopwords and len(w) > 2:
 			res[w] =  1# + res.get(w,0) # + math.exp(-i*len(tokens))#+ 1/float(i+1) #math.exp(-i*len(tokens)) + 1
 	return res
+def first_word(x):
+	words = [ w.lower() for w in wordpunct_tokenize(x['question_text'])  ]
+	res = { w:1 for w in words[0:1]  if w.lower() not in stopwords and len(w) > 3 }
+	return res
 
 def get_model(**args):
 	formatting = Pipeline([
 		('other',  Extractor(formatting_features)),
 		('scaler', StandardScaler()),
 	])
-
 	question = Pipeline([
-		('extract', Extractor(lambda x: x['question_text'])),
+		#('extract', Extractor(lambda x: x['question_text'])),
+		('extract', Extractor(first_word)),
 	#	('counter', word_counter),
-		('word_s', Extractor(word_scorer)),('counter',DictVectorizer()),
+		#('word_s', Extractor(word_scorer)),
+		('counter',DictVectorizer()),
 	#	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['question_K'])),
 	#	('cluster',MiniBatchKMeans(n_clusters=8))
 	])
@@ -199,7 +204,7 @@ if __name__ == '__main__':
 	training_count = int(sys.stdin.next())
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
 	target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
-	model = get_model(**{'question_K': 70, 'ctopics_K': 30, 'topics_K': 230})
+	model = get_model(**{'all_K': 450, 'smoother': 1, 'none_var': True})
 	model.fit(training_data,target)
 	test_count = int(sys.stdin.next())
 	test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]

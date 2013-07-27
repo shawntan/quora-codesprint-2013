@@ -154,7 +154,7 @@ def get_model(**args):
 	#	('counter', word_counter),
 	#	('word_s', Extractor(word_scorer)),
 		('counter',DictVectorizer()),
-		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['question_K'])),#80
+	#	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['question_K'])),#80
 	#	('cluster',MiniBatchKMeans(n_clusters=8))
 	])
 	topics = Pipeline([
@@ -163,25 +163,29 @@ def get_model(**args):
 		})),
 	#	('counter', FeatureHasher(n_features=2**16+1, dtype=np.float32)),
 		('counter',DictVectorizer()),
-		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['topics_K'])),#180
+	#	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['topics_K'])),#180
 	#	('cluster', MiniBatchKMeans(n_clusters=55))
 	#	('cluster',MiniBatchKMeans(n_clusters=8))
 	])
+	if args['none_var']: none = {}
+	else: none = { 'none': 1 }
 
 	ctopic = Pipeline([
 		('extract',Extractor(lambda x:
 			{ x['context_topic']['name']:1 }
-			if x['context_topic'] else {})),
+			if x['context_topic'] else none )),
 		('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
 		#('counter',DictVectorizer()),
-		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['ctopics_K'])),#45
+	#	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['ctopics_K'])),#45
 	])
 
 	topic_question = Pipeline([
 		('content',FeatureUnion([
 			('question', question),
 			('topics',   topics)
+			('ctopic',  ctopic),
 		])),
+		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['all_K'])),#45
 	])
 	others = Pipeline([
 		('extract', Extractor(lambda x: [
@@ -207,7 +211,6 @@ def get_model(**args):
 	model = Pipeline([
 		('union',FeatureUnion([
 			('content', topic_question),
-			('ctopic',  ctopic),
 			('formatting',formatting),
 			('followers',followers),
 			('others',others)
