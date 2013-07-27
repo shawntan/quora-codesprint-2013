@@ -1,6 +1,6 @@
 import sys,json,math
 from itertools import *
-from qn2       import get_model
+from qn3       import get_model
 if __name__ == '__main__':
 	training_count = int(sys.stdin.next())
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
@@ -20,9 +20,9 @@ if __name__ == '__main__':
 	answers    = [ json.loads(line)['__ans__'] for line in open(sys.argv[1],'r') ]
 	hyper_params = [
 	#	('max_n_grams', [1,2,3]),
-	#	('smoother',    [ 10**(-i)  for i in range(4) ]),
+		('smoother',    [ 10**(-i)  for i in range(4) ]),
 		('question_K',  [ 10*i       for i in reversed(range(1,8)) ]),
-		('topics_K',    [ 10*i      for i in range(20,30) ]),
+		('topics_K',    [ 10*i       for i in range(20,30) ]),
 		('ctopics_K',   [ 10*i       for i in range(3,8) ]),
 	]
 	param_vals = [p for _,p in hyper_params]
