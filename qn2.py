@@ -119,29 +119,6 @@ def formatting_features(obj):
 			] + qn_type
 	return result
 
-word_counter = CountVectorizer(
-		tokenizer=wordpunct_tokenize,
-		stop_words=stopwords,
-	#	binary=True,
-		ngram_range=(1,1),
-	#	dtype=np.float32
-	)
-
-counter = HashingVectorizer(
-#		vocabulary=vocabulary,
-		tokenizer=wordpunct_tokenize,
-		stop_words=stopwords,
-#		binary=True,
-		n_features = 2**10+1,
-		ngram_range=(1,2),
-#		dtype=np.float32
-	)
-
-formatting = Pipeline([
-	('other',  Extractor(formatting_features)),
-	('scaler', StandardScaler()),
-])
-
 def word_scorer(x):
 	res = {}
 	tokens = wordpunct_tokenize(x.lower())
@@ -151,89 +128,83 @@ def word_scorer(x):
 			res[w] =  1# + res.get(w,0) # + math.exp(-i*len(tokens))#+ 1/float(i+1) #math.exp(-i*len(tokens)) + 1
 	return res
 
+def get_model(**args):
+	formatting = Pipeline([
+		('other',  Extractor(formatting_features)),
+		('scaler', StandardScaler()),
+	])
 
-question = Pipeline([
-	('extract', Extractor(lambda x: x['question_text'])),
-#	('counter', word_counter),
-	('word_s', Extractor(word_scorer)),('counter',DictVectorizer()),
-	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=90)),
-#	('cluster',MiniBatchKMeans(n_clusters=8))
-])
-topics = Pipeline([
-	('extract',Extractor(lambda x: {
-		t['name']:1 for t in x['topics']
-	})),
-#	('counter', FeatureHasher(n_features=2**16+1, dtype=np.float32)),
-	('counter',DictVectorizer()),
-	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=250)),
-#	('cluster', MiniBatchKMeans(n_clusters=55))
-#	('cluster',MiniBatchKMeans(n_clusters=8))
-])
+	question = Pipeline([
+		('extract', Extractor(lambda x: x['question_text'])),
+	#	('counter', word_counter),
+		('word_s', Extractor(word_scorer)),('counter',DictVectorizer()),
+		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['question_K'])),
+	#	('cluster',MiniBatchKMeans(n_clusters=8))
+	])
+	topics = Pipeline([
+		('extract',Extractor(lambda x: {
+			t['name']:1 for t in x['topics']
+		})),
+	#	('counter', FeatureHasher(n_features=2**16+1, dtype=np.float32)),
+		('counter',DictVectorizer()),
+		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['topics_K'])),
+	#	('cluster', MiniBatchKMeans(n_clusters=55))
+	#	('cluster',MiniBatchKMeans(n_clusters=8))
+	])
 
-ctopic = Pipeline([
-	('extract',Extractor(lambda x:
-		{ x['context_topic']['name']:1 }
-		if x['context_topic'] else {})),
-	#('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
-	('counter',DictVectorizer()),
-	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=30)),
-])
+	ctopic = Pipeline([
+		('extract',Extractor(lambda x:
+			{ x['context_topic']['name']:1 }
+			if x['context_topic'] else {})),
+		#('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
+		('counter',DictVectorizer()),
+		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['ctopics_K'])),#30
+	])
 
-topic_question = Pipeline([
-	('content',FeatureUnion([
-		('question', question),
-		('topics',   topics)
-	])),
-])
-others = Pipeline([
-	('extract', Extractor(lambda x: [
-		1 if x['anonymous'] else 0,
-	])),
-#	('scaler',  StandardScaler())
-])
-
-
-followers = Pipeline([
-	('extract',Extractor(lambda x: [
-		math.log(sum(t['followers'] for t in x['topics'])+1e-2)
-	])),
-	('scaler' ,StandardScaler())
-])
-model = Pipeline([
-	('union',FeatureUnion([
-		('content', topic_question),
-#		('ctopic',  ctopic),
-		('formatting',formatting),
-		('followers',followers),
-#		('others',others)
-	])),
-#	('toarray',ToArray()),
-#	('dim_red',PCA(n_components=2)),
-#	('regress',DecisionTreeRegressor())
-#	('regress',KNeighborsRegressor())
-#	('regress',SVR())
-#	('regress',Ridge())
-	('regress',RidgeCV(alphas=[ 0.1**(-i) for i in range(5)]))
-#	('regress',SGDRegressor(alpha=1e-3,n_iter=1500))
-
-])
+	topic_question = Pipeline([
+		('content',FeatureUnion([
+			('question', question),
+			('topics',   topics)
+		])),
+	])
+	others = Pipeline([
+		('extract', Extractor(lambda x: [
+			1 if x['anonymous'] else 0,
+		])),
+	#	('scaler',  StandardScaler())
+	])
 
 
+	followers = Pipeline([
+		('extract',Extractor(lambda x: [
+			math.log(sum(t['followers'] for t in x['topics'])+1e-2)
+		])),
+		('scaler' ,StandardScaler())
+	])
+	model = Pipeline([
+		('union',FeatureUnion([
+			('content', topic_question),
+			('formatting',formatting),
+			('followers',followers),
+		])),
+		('regress',RidgeCV(alphas=[ 0.1**(-i) for i in range(5)]))
 
-training_count = int(sys.stdin.next())
-training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
-target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
+	])
+	return model
 
-model.fit(training_data,target)
-#sys.stderr.write(' '.join(vocabulary)+"\n")
-#sys.stderr.write("%s\n"%counter.transform([' '.join(vocabulary)]))
 
-test_count = int(sys.stdin.next())
-test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]
+if __name__ == '__main__':
+	training_count = int(sys.stdin.next())
+	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
+	target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
+	model = get_model()
+	model.fit(training_data,target)
+	test_count = int(sys.stdin.next())
+	test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]
 
-for i,j in zip(model.predict(test_data).tolist(),test_data):
-	print json.dumps({ 
-		'__ans__':math.exp(i)-0.9,'question_key':j['question_key']
-	})
+	for i,j in zip(model.predict(test_data).tolist(),test_data):
+		print json.dumps({ 
+			'__ans__':math.exp(i)-0.9,'question_key':j['question_key']
+		})
 
 
