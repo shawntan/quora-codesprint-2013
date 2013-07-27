@@ -137,17 +137,22 @@ def get_model(**args):
 	def word_scorer(x):
 		res = {}
 		tokens = wordpunct_tokenize(x)
-		for i,w in enumerate(tokens):
+		for i,w in enumerate(tokens[0:1]):
 			w = w.lower()
 			if w not in stopwords and len(w) > 3:
-				res[w] = res.get(w,0) + 1/(i+1)  #math.exp(-i*len(tokens)) + 1
+				res[w] = res.get(w,0) + 1#/float(i+1)  #math.exp(-i*len(tokens)) + 1
+		print res
 		return res
 
-
+	def first_word(x):
+		words = [ w.lower() for w in wordpunct_tokenize(x['question_text'])  ]
+		res = { w:1 for w in words[0:1]  if w.lower() not in stopwords and len(w) > 3 }
+		return res 
 	question = Pipeline([
-		('extract', Extractor(lambda x: x['question_text'])),
+	#	('extract', Extractor(lambda x: x['question_text'])),
+		('extract', Extractor(first_word)),
 	#	('counter', word_counter),
-		('word_s', Extractor(word_scorer)),
+	#	('word_s', Extractor(word_scorer)),
 		('counter',DictVectorizer()),
 		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['question_K'])),#80
 	#	('cluster',MiniBatchKMeans(n_clusters=8))
@@ -183,7 +188,6 @@ def get_model(**args):
 			1 if x['anonymous'] else 0,
 			1 if x['promoted_to'] else 0,
 			1 if x['num_answers'] else 0,
-			#math.log(x['num_answers']+1),
 			math.log(x['promoted_to']+1),
 			math.log(x['promoted_to']+1) - math.log(sum(t['followers'] for t in x['topics'])+1),
 			x['promoted_to']/float(sum(t['followers'] for t in x['topics'])+1),
@@ -208,14 +212,7 @@ def get_model(**args):
 			('followers',followers),
 			('others',others)
 		])),
-	#	('toarray',ToArray()),
-	#	('dim_red',PCA(n_components=2)),
-	#	('regress',DecisionTreeRegressor())
-	#	('regress',KNeighborsRegressor())
-	#	('regress',SVR())
-	#	('regress',Ridge())
 		('regress',RidgeCV(alphas=[ 0.1**(-i) for i in range(5)]))
-	#	('regress',SGDRegressor(alpha=1e-3,n_iter=1500))
 
 	])
 	return model
@@ -226,7 +223,7 @@ if __name__ == '__main__':
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
 	target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
 
-	model = get_model(**{'question_K': 70, 'ctopics_K': 40, 'topics_K': 210, 'smoother': 1})
+	model = get_model(**{'question_K': 50, 'ctopics_K': 70, 'topics_K': 290, 'smoother': 1})
 	model.fit(training_data,target)
 	#sys.stderr.write(' '.join(vocabulary)+"\n")
 	#sys.stderr.write("%s\n"%counter.transform([' '.join(vocabulary)]))
