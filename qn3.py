@@ -1,3 +1,6 @@
+"""
+57.892	58.62
+"""
 import sys,json,re,math
 import numpy as np
 from sklearn.pipeline import Pipeline,FeatureUnion
@@ -223,7 +226,7 @@ if __name__ == '__main__':
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
 	target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
 
-	model = get_model(**{'question_K': 70, 'ctopics_K': 30, 'topics_K': 200})
+	model = get_model(**{'question_K': 70, 'ctopics_K': 40, 'topics_K': 210, 'smoother': 1})
 	model.fit(training_data,target)
 	#sys.stderr.write(' '.join(vocabulary)+"\n")
 	#sys.stderr.write("%s\n"%counter.transform([' '.join(vocabulary)]))

@@ -197,7 +197,7 @@ if __name__ == '__main__':
 	training_count = int(sys.stdin.next())
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
 	target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
-	model = get_model(**{'question_K': 70, 'ctopics_K': 30, 'topics_K': 200})
+	model = get_model(**{'question_K': 70, 'ctopics_K': 30, 'topics_K': 230})
 	model.fit(training_data,target)
 	test_count = int(sys.stdin.next())
 	test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]
