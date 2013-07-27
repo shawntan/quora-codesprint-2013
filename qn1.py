@@ -178,6 +178,14 @@ def get_model(**args):
 
 
 if __name__ == '__main__':
+	training_count = int(sys.stdin.next())
+	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
+	target         = [ obj['__ans__'] for obj  in training_data ]
+	model = get_model(**{'class_alpha': 1, 'smoother': 1, 'ctopics_K': 30, 'topics_K': 200, 'max_n_grams': 1, 'question_K': 70, 'class_iters': 1000})
+	model.fit(training_data,target)
+	test_count = int(sys.stdin.next())
+	test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]
+
 	for i,j in zip(model.predict(test_data).tolist(),test_data):
 		print json.dumps({ 
 			'__ans__':i, 'question_key':j['question_key']

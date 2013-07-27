@@ -4,8 +4,7 @@ from qn1       import get_model
 if __name__ == '__main__':
 	training_count = int(sys.stdin.next())
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
-	target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
-
+	target         = [ obj['__ans__'] for obj  in training_data ]
 	n_folds    = 10
 	fold_size  = len(training_data)/n_folds
 	fold_train = [ training_data[:f*fold_size]+training_data[(f+1)*fold_size:] for f in range(n_folds) ]
@@ -43,7 +42,7 @@ if __name__ == '__main__':
 			for i,j in zip(model.predict(test).tolist(),target_test):
 				total_count += 1
 				match_count += 1 if i==j else 0
-			total_acc += match_count/float(total_count)
+			total_acc += 100*match_count/float(total_count)
 		acc = total_acc/float(n_folds)
 		if max_acc < acc:
 			max_acc,max_param = acc,param
