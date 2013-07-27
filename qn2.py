@@ -138,7 +138,7 @@ def get_model(**args):
 		('extract', Extractor(lambda x: x['question_text'])),
 	#	('counter', word_counter),
 		('word_s', Extractor(word_scorer)),('counter',DictVectorizer()),
-		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['question_K'])),
+	#	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['question_K'])),
 	#	('cluster',MiniBatchKMeans(n_clusters=8))
 	])
 	topics = Pipeline([
@@ -147,18 +147,19 @@ def get_model(**args):
 		})),
 	#	('counter', FeatureHasher(n_features=2**16+1, dtype=np.float32)),
 		('counter',DictVectorizer()),
-		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['topics_K'])),
+	#	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['topics_K'])),
 	#	('cluster', MiniBatchKMeans(n_clusters=55))
 	#	('cluster',MiniBatchKMeans(n_clusters=8))
 	])
-
+	if args['none_var']: none = {}
+	else: none = { 'none': 1 }
 	ctopic = Pipeline([
 		('extract',Extractor(lambda x:
 			{ x['context_topic']['name']:1 }
-			if x['context_topic'] else {})),
+			if x['context_topic'] else none)),
 		#('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
 		('counter',DictVectorizer()),
-		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['ctopics_K'])),#30
+#		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['ctopics_K'])),#30
 	])
 
 	topic_question = Pipeline([
@@ -166,6 +167,7 @@ def get_model(**args):
 			('question', question),
 			('topics',   topics)
 		])),
+		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['all_K'])),#30
 	])
 	others = Pipeline([
 		('extract', Extractor(lambda x: [
@@ -177,7 +179,7 @@ def get_model(**args):
 
 	followers = Pipeline([
 		('extract',Extractor(lambda x: [
-			math.log(sum(t['followers'] for t in x['topics'])+1e-2)
+			math.log(sum(t['followers'] for t in x['topics'])+args['smoother'])
 		])),
 		('scaler' ,StandardScaler())
 	])
