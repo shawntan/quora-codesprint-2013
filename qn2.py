@@ -51,12 +51,11 @@ class ToArray:
 		return self.transform(X)
 
 qn_type_words = [ set(l) for l in [
-#	['who','which','when','where'],
-#	['what','why','how'],
-#	['is','do','can','did','was'],
+	['who','which','when','where'],
+	['what','why','how'],
+	['is','do','can','did','was'],
 	['i'],
-	[
-		#'should',
+	[#'should',
 		'could',
 		'would',
 	#	'will'
@@ -104,16 +103,16 @@ def formatting_features(obj):
 	result = [
 				nm_pres,
 				pl_pres,
-			#	qn_mark,
+				qn_mark,
 				start_cap,
-			#	qn_somewhere,
+				qn_somewhere,
 				correct_form_ratio,
 				len(punct),
 		   		math.log(len(topics)+1),
 				name_ratio,
 				topic_word_ratio,
 				dict_words,
-			#	qn_topic_words,
+				qn_topic_words,
 				correct_form_count,
 				math.log(total_words+1)
 			] + qn_type
@@ -172,7 +171,6 @@ def get_model(**args):
 			('question', question),
 			('topics',   topics)
 		])),
-		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['all_K'])),#30
 	])
 	others = Pipeline([
 		('extract', Extractor(lambda x: [
@@ -194,6 +192,7 @@ def get_model(**args):
 			('formatting',formatting),
 			('followers',followers),
 		])),
+		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['all_K'])),#30
 		('regress',RidgeCV(alphas=[ 0.1**(-i) for i in range(5)]))
 
 	])

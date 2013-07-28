@@ -127,13 +127,13 @@ def get_model(**args):
 			t['name']:1 for t in x['topics']
 		})),
 		('counter',DictVectorizer()),
-		('f_sel',   SelectKBest(score_func=chi2,k=args['topics_K'])),#260
+#		('f_sel',   SelectKBest(score_func=chi2,k=args['topics_K'])),#260
 	])
 
 	question = Pipeline([
 		('extract', Extractor(lambda x: x['question_text'])),
 		('counter', word_counter),
-		('f_sel',   SelectKBest(score_func=chi2,k=args['question_K'])),#25
+#		('f_sel',   SelectKBest(score_func=chi2,k=args['question_K'])),#25
 	])
 
 	ctopic = Pipeline([
@@ -141,7 +141,7 @@ def get_model(**args):
 			{ x['context_topic']['name']:1 }
 			if x['context_topic'] else { 'none':1 })),
 		('counter', DictVectorizer()),
-		('f_sel',   SelectKBest(score_func=chi2,k=args['ctopics_K'])),#30
+#		('f_sel',   SelectKBest(score_func=chi2,k=args['ctopics_K'])),#30
 	])
 
 
@@ -173,6 +173,7 @@ def get_model(**args):
 			('followers',followers),
 			('others',others)
 		])),
+		('f_sel',   SelectKBest(score_func=chi2,k=args['all_K'])),#30
 		('classify',SGDClassifier(alpha=args['class_alpha'],n_iter=args['class_iters']))#1e-3#1500
 	])
 	return model
@@ -182,7 +183,7 @@ if __name__ == '__main__':
 	training_count = int(sys.stdin.next())
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
 	target         = [ obj['__ans__'] for obj  in training_data ]
-	model = get_model(**{'class_alpha': 1, 'smoother': 0.01, 'ctopics_K': 30, 'topics_K': 200, 'max_n_grams': 1, 'question_K': 70, 'class_iters': 1000})
+	model = get_model(**{'class_alpha': 1, 'smoother': 0.01,  'max_n_grams': 1, 'all_K': 450, 'class_iters': 1000})
 	model.fit(training_data,target)
 	test_count = int(sys.stdin.next())
 	test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]

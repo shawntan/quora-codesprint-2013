@@ -22,7 +22,7 @@ if __name__ == '__main__':
 	#	('question_K',  [ 30 ]),
 	#	('topics_K',    [ 240 ]),
 	#	('ctopics_K',   [ 40 ]),
-		('all_K', [ 25 * i for i in range(10,26) ]),
+		('all_K', [ 10 * i for i in range(40,50) ]),
 		('none_var', [ True, False ]),
 	]
 	param_vals = [p for _,p in hyper_params]
