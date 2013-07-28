@@ -182,7 +182,7 @@ def get_model(**args):
 	topic_question = Pipeline([
 		('content',FeatureUnion([
 			('question', question),
-			('topics',   topics)
+			('topics',   topics),
 			('ctopic',  ctopic),
 		])),
 		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['all_K'])),#45
@@ -204,7 +204,7 @@ def get_model(**args):
 
 	followers = Pipeline([
 		('extract',Extractor(lambda x: [
-			math.log(sum(t['followers'] for t in x['topics'])+args['smoother'])
+			math.log(sum(t['followers'] for t in x['topics'])+1)
 		])),
 	#	('scaler' ,StandardScaler())
 	])
