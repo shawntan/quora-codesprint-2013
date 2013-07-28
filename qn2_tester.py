@@ -1,6 +1,7 @@
+
 import sys,json,math
 from itertools import *
-from qn3       import get_model
+from qn2       import get_model
 if __name__ == '__main__':
 	training_count = int(sys.stdin.next())
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
@@ -22,32 +23,36 @@ if __name__ == '__main__':
 	#	('question_K',  [ 30 ]),
 	#	('topics_K',    [ 240 ]),
 	#	('ctopics_K',   [ 40 ]),
-		('all_K', [ 10 * i for i in range(38,52) ]),
-		('none_var', [ True, False ]),
+		('all_K', [ 10 * i for i in range(28,52) ]),
+		('none_var', [ True ]),
+		('smoother',    [ 1 ]),
 	]
 	param_vals = [p for _,p in hyper_params]
 	max_acc = 0.0
 	max_param = None
 	for i in product(*param_vals):
 		param = dict( pair for pair in izip((n for n,_ in hyper_params),i) )
-		total_acc = 0
-		print "New parameters:",param
-		for j,(train,test,target_train,target_test) in enumerate(izip(fold_train,fold_test,fold_target_train,fold_target_test)):
-			print "\tFold no. %d"%j
-			model = get_model(**param)
-			model.fit(train,target_train)
-			total_count = 0
-			total_log_error_sq = 0
-			for i,j in zip(model.predict(test).tolist(),target_test):
-				i = math.exp(i) - 0.9
-				total_count += 1
-				total_log_error_sq += ( math.log(i+1) - math.log(j+1))**2
+		try:
+			total_acc = 0
+			print "New parameters:",param
+			for j,(train,test,target_train,target_test) in enumerate(izip(fold_train,fold_test,fold_target_train,fold_target_test)):
+				print "\tFold no. %d"%j
+				model = get_model(**param)
+				model.fit(train,target_train)
+				total_count = 0
+				total_log_error_sq = 0
+				for i,j in zip(model.predict(test).tolist(),target_test):
+					i = math.exp(i) - 0.9
+					total_count += 1
+					total_log_error_sq += ( math.log(i+1) - math.log(j+1))**2
 
-			total_acc += ( 0.5 / math.sqrt( total_log_error_sq/total_count ) ) * 100
-		acc = total_acc/float(n_folds)
-		if max_acc < acc:
-			max_acc,max_param = acc,param
-			print "Accuracy: %0.3f"%(acc)
-			print "Suggested parameters:", param
+				total_acc += ( 0.5 / math.sqrt( total_log_error_sq/total_count ) ) * 100
+			acc = total_acc/float(n_folds)
+			if max_acc < acc:
+				max_acc,max_param = acc,param
+				print "Accuracy: %0.3f"%(acc)
+				print "Suggested parameters:", param
+		except:
+			pass
 
 	print "Suggested parameters:", max_param 
