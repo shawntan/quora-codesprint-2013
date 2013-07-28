@@ -48,12 +48,12 @@ class ToArray:
 		return self.transform(X)
 
 qn_type_words = [ set(l) for l in [
-	['who','which','when','where'],
-	['what','why','how'],
+#	['who','which','when','where'],
+#	['what','why','how'],
 	['is','do','can','did','was'],
 	['i'],
-	['deleted'],
-	['should','could','would','will']
+#	['deleted'],
+#	['should','could','would','will']
 ]]
 
 def formatting_features(obj):
@@ -76,9 +76,9 @@ def formatting_features(obj):
 		pl_pres = sum(1.0 for w in tokens if w.lower() in places
 							and re.match(r'^[A-Z]',w))
 	else:
-		qn_type = [-1.0]*len(qn_type_words)
-		nm_pres = -1.0
-		pl_pres = -1.0
+		qn_type = [-0.0]*len(qn_type_words)
+		nm_pres = -0.0
+		pl_pres = -0.0
 
 #	qn_somewhere =  1 if sum(qn_type) and (re.match(r'\?$',question)
 #						or re.match(r'\?\s*[A-Z]',question)) else -1
@@ -99,11 +99,11 @@ def formatting_features(obj):
 				1 if pl_pres else 0,
 				qn_mark,
 				start_cap,
-				qn_somewhere,
-				correct_form_ratio,
-				len(punct),
+		#		qn_somewhere,
+		#		correct_form_ratio,
+		#		len(punct),
 				math.log(len(topics)+1),
-				name_ratio,
+		#		name_ratio,
 				topic_word_ratio,
 				1 if qn_topic_words else 0,
 				correct_form_count,
@@ -137,7 +137,7 @@ def get_model(**args):
 	def word_scorer(x):
 		res = {}
 		tokens = wordpunct_tokenize(x)
-		for i,w in enumerate(tokens[0:1]):
+		for i,w in enumerate(tokens[0:3]):
 			w = w.lower()
 			if w not in stopwords and len(w) > 3:
 				res[w] = res.get(w,0) + 1#/float(i+1)  #math.exp(-i*len(tokens)) + 1
@@ -146,7 +146,7 @@ def get_model(**args):
 
 	def first_word(x):
 		words = [ w.lower() for w in wordpunct_tokenize(x['question_text'])  ]
-		res = { w:1 for w in words[0:1]  if w.lower() not in stopwords and len(w) > 3 }
+		res = { w:1 for w in words[0:1]  if len(w) > 3 }
 		return res 
 	question = Pipeline([
 	#	('extract', Extractor(lambda x: x['question_text'])),
@@ -175,7 +175,7 @@ def get_model(**args):
 			{ x['context_topic']['name']:1 }
 			if x['context_topic'] else none )),
 		('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
-		#('counter',DictVectorizer()),
+	#	('counter',DictVectorizer()),
 	#	('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['ctopics_K'])),#45
 	])
 
@@ -185,12 +185,13 @@ def get_model(**args):
 			('topics',   topics),
 			('ctopic',  ctopic),
 		])),
+		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['all_K'])),#45
 	])
 	others = Pipeline([
 		('extract', Extractor(lambda x: [
-			1 if x['anonymous'] else 0,
-			1 if x['promoted_to'] else 0,
-			1 if x['num_answers'] else 0,
+			1 if x['anonymous'] else -1,
+			1 if x['promoted_to'] else -1,
+			1 if x['num_answers'] else -1,
 			math.log(x['promoted_to']+1),
 			math.log(x['promoted_to']+1) - math.log(sum(t['followers'] for t in x['topics'])+1),
 			x['promoted_to']/float(sum(t['followers'] for t in x['topics'])+1),
@@ -214,7 +215,6 @@ def get_model(**args):
 			('followers',followers),
 			('others',others)
 		])),
-		('f_sel',   SelectKBest(score_func=lambda X,Y:f_regression(X,Y,center=False),k=args['all_K'])),#45
 		('regress',RidgeCV(alphas=[ 0.1**(-i) for i in range(5)]))
 
 	])
@@ -222,9 +222,10 @@ def get_model(**args):
 
 
 if __name__ == '__main__':
+	smoothing = 0.9
 	training_count = int(sys.stdin.next())
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
-	target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
+	target         = [ math.log(obj['__ans__']+smoothing) for obj  in training_data ]
 
 	model = get_model(**{'all_K': 450, 'none_var': True})
 	model.fit(training_data,target)
@@ -236,7 +237,6 @@ if __name__ == '__main__':
 
 	for i,j in zip(model.predict(test_data).tolist(),test_data):
 		print json.dumps({ 
-			'__ans__':math.exp(i)-0.9,'question_key':j['question_key']
+			'__ans__':math.exp(i)-smoothing,'question_key':j['question_key']
 		})
-
 

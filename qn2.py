@@ -51,9 +51,9 @@ class ToArray:
 		return self.transform(X)
 
 qn_type_words = [ set(l) for l in [
-	['who','which','when','where'],
-	['what','why','how'],
-	['is','do','can','did','was'],
+#	['who','which','when','where'],
+#	['what','why','how'],
+#	['is','do','can','did','was'],
 	['i'],
 	[#'should',
 		'could',
@@ -103,16 +103,16 @@ def formatting_features(obj):
 	result = [
 				nm_pres,
 				pl_pres,
-				qn_mark,
+#				qn_mark,
 				start_cap,
-				qn_somewhere,
+#				qn_somewhere,
 				correct_form_ratio,
 				len(punct),
 		   		math.log(len(topics)+1),
 				name_ratio,
 				topic_word_ratio,
 				dict_words,
-				qn_topic_words,
+#				qn_topic_words,
 				correct_form_count,
 				math.log(total_words+1)
 			] + qn_type
@@ -128,7 +128,7 @@ def word_scorer(x):
 	return res
 def first_word(x):
 	words = [ w.lower() for w in wordpunct_tokenize(x['question_text'])  ]
-	res = { w:1 for w in words[0:1]  if w.lower() not in stopwords and len(w) > 3 }
+	res = { w:1 for w in words[0:1]  if w.lower() not in stopwords and len(w) > 2 }
 	return res
 
 def get_model(**args):
@@ -169,7 +169,8 @@ def get_model(**args):
 	topic_question = Pipeline([
 		('content',FeatureUnion([
 			('question', question),
-			('topics',   topics)
+			('topics',   topics),
+#			('ctopic',   ctopic)
 		])),
 	])
 	others = Pipeline([
@@ -203,7 +204,7 @@ if __name__ == '__main__':
 	training_count = int(sys.stdin.next())
 	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
 	target         = [ math.log(obj['__ans__']+0.9) for obj  in training_data ]
-	model = get_model(**{'all_K': 450, 'smoother': 1, 'none_var': True})
+	model = get_model(**{'all_K': 370, 'smoother': 1, 'none_var': True})
 	model.fit(training_data,target)
 	test_count = int(sys.stdin.next())
 	test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]

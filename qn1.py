@@ -1,10 +1,8 @@
 """
-62.900	64.98
-63.200
+62.900
 """
 import sys,json,re,math
 import numpy as np
-from itertools import *
 from sklearn.pipeline import Pipeline,FeatureUnion
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import CountVectorizer,TfidfTransformer,HashingVectorizer
@@ -14,14 +12,13 @@ from sklearn.svm import *
 from sklearn.cluster import KMeans,MiniBatchKMeans
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import *
-from sklearn.ensemble import *
 from sklearn.preprocessing import StandardScaler
 from nltk.tokenize import wordpunct_tokenize
 from nltk.corpus   import words
 from nltk.corpus   import stopwords,gazetteers,names
 from sklearn.feature_selection import *
-
 eng_words = set([ w.lower() for w in words.words('en') ])
+
 qn_words = set(['who','what','what',
 				'when','where','how',
 				'is','should','do',
@@ -52,11 +49,31 @@ class ToArray:
 		return self.transform(X)
 
 qn_type_words = [ set(l) for l in [
-	['who','which','when','where'],
-	['what','why','how'],
-#	['is','do','can','did','was'],
+	[
+		'who',
+#		'which',
+		'when',
+#		'where'
+	],
+	[
+		'what',
+	#	'why',
+		'how'
+	],
+	[
+	#	'is',
+		'do',
+		'can',
+	#	'did',
+		'was'
+	],
 	['i'],
-	['should','could','would','will']
+#	[
+	#	'should',
+	#	'could',
+#		'would',
+	#	'will'
+#	]
 ]]
 
 def formatting_features(obj):
@@ -67,7 +84,7 @@ def formatting_features(obj):
 	top_toks = set([ w.lower() for t in obj['topics'] 
 						for w in wordpunct_tokenize(t['name']) ])
 	qn_toks  = set(tokens)
-	qn_topic_words = len(top_toks & qn_toks)
+	#qn_topic_words = len(top_toks & qn_toks)
 
 	qn_mark   = 1 if "?" in question else -1 
 	start_cap = 1 if re.match(r'^[A-Z]',question) else -1
@@ -79,12 +96,12 @@ def formatting_features(obj):
 		pl_pres = sum(1.0 for w in tokens if w.lower() in places
 							and re.match(r'^[A-Z]',w))
 	else:
-		qn_type = [-1.0]*len(qn_type_words)
+		qn_type = [0.0]*len(qn_type_words)
 		nm_pres = -1.0
 		pl_pres = -1.0
 
-	qn_somewhere =  1 if sum(qn_type) and (re.match(r'\?$',question)
-						or re.match(r'\?\s*[A-Z]',question)) else -1
+#	qn_somewhere =  1 if sum(qn_type) and (re.match(r'\?$',question)
+#						or re.match(r'\?\s*[A-Z]',question)) else -1
 
 	total_words = len(tokens)
 	dict_words  = sum(1 for w in tokens if w.lower() in eng_words)
@@ -94,102 +111,142 @@ def formatting_features(obj):
 		)
 	question_form = 1 if '?' in punct and sum(1 for w in tokens if w in qn_words) else -1
 	correct_form_ratio = correct_form_count/float(total_words+1)
-	topic_word_ratio   = qn_topic_words/float(total_words+1)
+	#topic_word_ratio   = qn_topic_words/float(total_words+1)
 	name_ratio         = (nm_pres + pl_pres)/float(total_words+1)
 	punctuation_ratio  = len(punct)/float(total_words+1)
 	result = [
+			#	1 if nm_pres else 0,
 				nm_pres,
+			#	1 if pl_pres else 0,
 				pl_pres,
 				qn_mark,
 				start_cap,
+			#	qn_somewhere,
 				correct_form_ratio,
-				len(punct),
+				#len(punct),
+				punctuation_ratio,
 		   		math.log(len(topics)+1),
+		   		#len(topics),
 				name_ratio,
+			#	topic_word_ratio,
 				dict_words,
-				math.log(total_words+1)
+			#	qn_topic_words,
+			#	correct_form_count,
+			#	math.log(total_words+1),
+				total_words,
 			] + qn_type
 	return result
 
-def get_model(**args):
-	word_counter = CountVectorizer(
-			tokenizer=wordpunct_tokenize,
-			stop_words=stopwords,
-			ngram_range=(1,args['max_n_grams']),
-		)
-	formatting = Pipeline([
-		('other',  Extractor(formatting_features)),
-		('scaler', StandardScaler()),
-	])
-
-	topics = Pipeline([
-		('extract',Extractor(lambda x: {
-			t['name']:1 for t in x['topics']
-		})),
-		('counter',DictVectorizer()),
-#		('f_sel',   SelectKBest(score_func=chi2,k=args['topics_K'])),#260
-	])
-
-	question = Pipeline([
-		('extract', Extractor(lambda x: x['question_text'])),
-		('counter', word_counter),
-#		('f_sel',   SelectKBest(score_func=chi2,k=args['question_K'])),#25
-	])
-
-	ctopic = Pipeline([
-		('extract',Extractor(lambda x:
-			{ x['context_topic']['name']:1 }
-			if x['context_topic'] else { 'none':1 })),
-		('counter', DictVectorizer()),
-#		('f_sel',   SelectKBest(score_func=chi2,k=args['ctopics_K'])),#30
-	])
+word_counter = CountVectorizer(
+		tokenizer=wordpunct_tokenize,
+		stop_words=stopwords,
+#		binary=True,
+		ngram_range=(1,1),
+	#	dtype=np.float32
+	)
+formatting = Pipeline([
+	('other',  Extractor(formatting_features)),
+	('scaler', StandardScaler()),
+])
 
 
 
-	topic_question = Pipeline([
-		('content',FeatureUnion([
-			('question', question),
-			('ctopic',  ctopic),
-			('topics',   topics)
-		])),
-#		('f_sel',   SelectKBest(score_func=chi2,k=210)),#260
-	])
-	others = Pipeline([
-		('extract', Extractor(lambda x: [
-			float(1 if x['anonymous'] else 0),
-		])),
-	])
-
-	followers = Pipeline([
-		('extract',Extractor(lambda x: [
-			math.log(sum(t['followers'] for t in x['topics'])+args['smoother'])
-		])),
-		('scaler' ,StandardScaler())
-	])
-	model = Pipeline([
-		('union',FeatureUnion([
-			('content', topic_question),
-			('formatting',formatting),
-			('followers',followers),
-			('others',others)
-		])),
-		('f_sel',   SelectKBest(score_func=chi2,k=args['all_K'])),#30
-		('classify',SGDClassifier(alpha=args['class_alpha'],n_iter=args['class_iters']))#1e-3#1500
-	])
-	return model
+def word_scorer(x):
+	res = {}
+	tokens = wordpunct_tokenize(x.lower())
+	for i,w in enumerate(tokens):
+		#w= ' '.join(w)
+		if w not in stopwords and len(w) > 2:
+			res[w] =  res.get(w,0) + 1/float(i+1)#math.exp(-i*len(tokens)) + 1
+	return res
 
 
-if __name__ == '__main__':
-	training_count = int(sys.stdin.next())
-	training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
-	target         = [ obj['__ans__'] for obj  in training_data ]
-	model = get_model(**{'class_alpha': 1, 'smoother': 0.01,  'max_n_grams': 1, 'all_K': 450, 'class_iters': 1000})
-	model.fit(training_data,target)
-	test_count = int(sys.stdin.next())
-	test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]
+question = Pipeline([
+	('extract', Extractor(lambda x: x['question_text'])),
+	#('extract', Extractor(lambda x: x['question_text'])),
+	('counter', word_counter),
+#	('word_s', Extractor(word_scorer)),('counter',DictVectorizer()),
+#	('f_sel',   SelectKBest(score_func=chi2,k=20)),
+#	('cluster',MiniBatchKMeans(n_clusters=8))
+])
+topics = Pipeline([
+	('extract',Extractor(lambda x: {
+		t['name']:1 for t in x['topics']
+	})),
+#	('counter', FeatureHasher(n_features=2**16+1, dtype=np.float32)),
+	('counter',DictVectorizer()),
+#	('f_sel',   SelectKBest(score_func=chi2,k=260)),
+#	('cluster', MiniBatchKMeans(n_clusters=55))
+#	('cluster',MiniBatchKMeans(n_clusters=8))
+])
 
-	for i,j in zip(model.predict(test_data).tolist(),test_data):
-		print json.dumps({ 
-			'__ans__':i, 'question_key':j['question_key']
-		})
+ctopic = Pipeline([
+	('extract',Extractor(lambda x:
+		{ x['context_topic']['name']:1 }
+		if x['context_topic'] else {'none':1})),
+	#('counter',FeatureHasher(n_features=2**10+1, dtype=np.float)),
+	('counter', DictVectorizer()),
+#	('f_sel',   SelectKBest(score_func=chi2,k=30)),
+])
 
+topic_question = Pipeline([
+	('content',FeatureUnion([
+		('question', question),
+		('topics',   topics),
+		('ctopic',   ctopic),
+	])),
+	('f_sel',   SelectKBest(score_func=chi2,k=650)),#650
+])
+others = Pipeline([
+	('extract', Extractor(lambda x: [
+		float(1 if x['anonymous'] else 0),
+	])),
+#	('scaler',  StandardScaler())
+])
+
+
+followers = Pipeline([
+	('extract',Extractor(lambda x: [
+		math.log(sum(t['followers'] for t in x['topics'])+1)
+#		float(sum(t['followers'] for t in x['topics']))
+	])),
+	('scaler' ,StandardScaler())
+])
+model = Pipeline([
+	('union',FeatureUnion([
+		('content', topic_question),
+		('formatting',formatting),
+		('followers',followers),
+		('others',others)
+	])),
+#	('toarray',ToArray()),
+#	('dim_red',PCA(n_components=2)),
+#	('regress',DecisionTreeRegressor())
+#	('regress',KNeighborsRegressor())
+#	('regress',SVR())
+#	('regress',Ridge())
+#	('f_sel',   SelectKBest(score_func=f_classif,k=500)),#650
+	('classify',SGDClassifier(alpha=1e-3,n_iter=1250))
+#	('classify',SVC(kernel='linear'))
+#	('classify',LinearSVC())
+#	('regress',SGDRegressor(alpha=1e-3,n_iter=1500))
+
+])
+
+
+
+training_count = int(sys.stdin.next())
+training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
+target         = [ obj['__ans__'] for obj  in training_data ]
+
+model.fit(training_data,target)
+#sys.stderr.write(' '.join(vocabulary)+"\n")
+#sys.stderr.write("%s\n"%counter.transform([' '.join(vocabulary)]))
+
+test_count = int(sys.stdin.next())
+test_data  = [ json.loads(sys.stdin.next()) for _ in xrange(test_count) ]
+
+for i,j in zip(model.predict(test_data).tolist(),test_data):
+	print json.dumps({ 
+		'__ans__':i, 'question_key':j['question_key']
+	})
