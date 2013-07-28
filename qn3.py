@@ -80,8 +80,8 @@ def formatting_features(obj):
 		nm_pres = -1.0
 		pl_pres = -1.0
 
-#	qn_somewhere =  1 if sum(qn_type) and (re.match(r'\?$',question)
-#						or re.match(r'\?\s*[A-Z]',question)) else -1
+	qn_somewhere =  1 if sum(qn_type) and (re.match(r'\?$',question)
+						or re.match(r'\?\s*[A-Z]',question)) else -1
 
 	total_words = len(tokens)
 	#dict_words  = sum(1 for w in tokens if w.lower() in eng_words)
@@ -90,7 +90,7 @@ def formatting_features(obj):
 			or re.match(r'^[A-Z]',w)
 		)
 	question_form = 1 if '?' in punct and sum(1 for w in tokens if w in qn_words) else -1
-	#correct_form_ratio = correct_form_count/float(total_words+1)
+	correct_form_ratio = correct_form_count/float(total_words+1)
 	topic_word_ratio  = qn_topic_words/float(total_words+1)
 	name_ratio        = (nm_pres + pl_pres)/float(total_words+1)
 	punctuation_ratio = len(punct)/float(total_words+1)
