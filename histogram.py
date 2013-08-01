@@ -7,12 +7,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 
-from nltk.tokenize import word_tokenize
+from nltk.tokenize import wordpunct_tokenize
 eps = 1
 training_count = int(sys.stdin.next())
 training_data  = [ json.loads(sys.stdin.next()) for _ in xrange(training_count) ]
 
-do = lambda x: math.log(len(word_tokenize(x['question_text'])))
+do = lambda x: sum(t['followers'] for t in x['topics'])+1
+#do = lambda x: len(wordpunct_tokenize(x['question_text']))
+
 
 X = np.array([do(i) for i in training_data ])
 mu, sigma = np.mean(X), np.std(X)
@@ -32,8 +34,8 @@ bincenters = 0.5*(bins[1:]+bins[:-1])
 y = mlab.normpdf( bincenters, mu, sigma)
 l = ax.plot(bincenters, y, 'r--', linewidth=1)
 
-ax.set_xlabel('Smarts')
-ax.set_ylabel('Count')
+ax.set_xlabel('No. of Followers')
+ax.set_ylabel('Frequency')
 #ax.set_title(r'$\mathrm{Histogram\ of\ IQ:}\ \mu=100,\ \sigma=15$')
 #ax.set_xlim(40, 160)
 #ax.set_ylim(0, 0.03)
